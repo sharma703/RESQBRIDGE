@@ -1,0 +1,106 @@
+.dashboard-page { background: var(--clr-bg); }
+
+.dashboard-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: 1.75rem; flex-wrap: wrap;
+}
+
+/* Filters */
+.dashboard-filters {
+  background: var(--clr-bg-card);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  display: flex; flex-direction: column; gap: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+.search-box {
+  display: flex; align-items: center; gap: 0.625rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.875rem;
+  color: var(--clr-text-muted);
+}
+.search-box input {
+  background: none; border: none; color: var(--clr-text);
+  font-size: 0.875rem; flex: 1; outline: none;
+}
+.search-box input::placeholder { color: var(--clr-text-faint); }
+
+.filter-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.filter-label {
+  display: flex; align-items: center; gap: 0.35rem;
+  font-size: 0.75rem; font-weight: 700; color: var(--clr-text-faint);
+  text-transform: uppercase; letter-spacing: 0.06em; min-width: 70px;
+}
+.filter-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+/* Report list */
+.report-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+.report-row {
+  background: var(--clr-bg-card);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  border-left: 4px solid transparent;
+}
+.report-row:hover { border-color: var(--clr-border-2); box-shadow: var(--shadow-sm); }
+
+.urgency-border-red    { border-left-color: var(--clr-primary); }
+.urgency-border-orange { border-left-color: var(--clr-accent); }
+.urgency-border-yellow { border-left-color: var(--clr-yellow); }
+.urgency-border-green  { border-left-color: var(--clr-green); }
+
+.report-row-main {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 1rem; padding: 1rem 1.25rem;
+  cursor: pointer; align-items: start;
+}
+@media (max-width: 700px) {
+  .report-row-main { grid-template-columns: 1fr; }
+  .report-row-right { display: flex; gap: 0.5rem; align-items: center; }
+}
+
+.report-row-left {
+  display: flex; flex-direction: column; gap: 0.4rem; min-width: 120px;
+}
+.report-id { font-family: var(--font-head); font-size: 0.85rem; font-weight: 700; color: var(--clr-blue); }
+
+.report-row-center { flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+.report-category { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+.report-desc { font-size: 0.85rem; color: var(--clr-text-muted); line-height: 1.5; }
+.report-location-line { font-size: 0.78rem; color: var(--clr-text-faint); }
+
+.report-row-right { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-end; min-width: 120px; }
+.report-time { display: flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--clr-text-faint); }
+
+/* Quick actions */
+.report-row-actions {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-top: 1px solid var(--clr-border);
+  background: rgba(255,255,255,0.02);
+  flex-wrap: wrap;
+}
+
+/* AI panel */
+.ai-summary-panel {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid rgba(168,85,247,0.15);
+  background: rgba(168,85,247,0.05);
+}
+.ai-summary-head { font-size: 0.8rem; font-weight: 700; color: var(--clr-purple); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+.ai-summary-body { font-size: 0.85rem; color: var(--clr-text-muted); line-height: 1.6; margin-bottom: 0.5rem; }
+.ai-summary-footer { font-size: 0.72rem; color: var(--clr-text-faint); }
+
+/* Empty */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.75rem; padding: 4rem;
+  background: var(--clr-bg-card); border: 1px solid var(--clr-border);
+  border-radius: var(--radius-lg);
+  color: var(--clr-text-faint); text-align: center;
+}

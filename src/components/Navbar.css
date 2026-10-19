@@ -1,0 +1,171 @@
+.navbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--nav-h);
+  z-index: 1000;
+  background: rgba(10,10,18,0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--clr-border);
+}
+
+.navbar-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* Logo */
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.navbar-logo-icon {
+  width: 34px; height: 34px;
+  background: var(--clr-primary);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 0 14px rgba(255,59,59,0.4);
+}
+.navbar-logo-text {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--clr-text);
+}
+.navbar-logo-accent { color: var(--clr-primary); }
+
+/* Nav links */
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1;
+}
+.navbar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--clr-text-muted);
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.navbar-link:hover { background: rgba(255,255,255,0.06); color: var(--clr-text); }
+.navbar-link.active { background: rgba(255,255,255,0.08); color: var(--clr-text); }
+
+/* Right */
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.navbar-emergency {
+  background: var(--clr-primary) !important;
+  animation: pulse-border 2s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 10px rgba(255,59,59,0.3); }
+  50%       { box-shadow: 0 0 20px rgba(255,59,59,0.6); }
+}
+
+/* Role menu */
+.role-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--clr-bg-card-2);
+  border: 1px solid var(--clr-border-2);
+  border-radius: var(--radius-md);
+  min-width: 220px;
+  box-shadow: var(--shadow-lg);
+  z-index: 2000;
+  overflow: hidden;
+}
+.role-menu-title {
+  padding: 0.75rem 1rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--clr-text-faint);
+}
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: none;
+  border: none;
+  color: var(--clr-text-muted);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.role-option:hover { background: rgba(255,255,255,0.06); color: var(--clr-text); }
+.role-option.active { background: var(--clr-blue-dim); color: var(--clr-blue); }
+
+/* Link-flavored role option (for <Link> elements in the role menu) */
+.role-option-link {
+  text-decoration: none;
+  border-top: 1px solid var(--clr-border);
+  margin-top: 0.25rem;
+  color: var(--clr-text-faint);
+  font-style: italic;
+}
+.role-option-link:hover { color: var(--clr-blue); }
+
+/* Separator line inside role menu */
+.role-menu-sep {
+  height: 1px;
+  background: var(--clr-border);
+  margin: 0.25rem 0;
+}
+
+/* Role indicator button in navbar */
+.navbar-role-btn {
+  font-size: 0.8rem;
+  gap: 0.3rem;
+}
+
+.role-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+}
+
+/* Mobile menu */
+.navbar-mobile {
+  display: flex;
+  flex-direction: column;
+  background: var(--clr-bg-card);
+  border-top: 1px solid var(--clr-border);
+  padding: 0.75rem 0;
+}
+.navbar-mobile-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.5rem;
+  color: var(--clr-text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--transition);
+}
+.navbar-mobile-link:hover,
+.navbar-mobile-link.active { background: rgba(255,255,255,0.05); color: var(--clr-text); }
