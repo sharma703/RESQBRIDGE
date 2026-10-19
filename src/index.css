@@ -3,13 +3,15 @@
    ========================================================= */
 
 :root {
-  /* Color palette */
-  --clr-bg:          #0a0a12;
-  --clr-bg-2:        #0f0f1e;
-  --clr-bg-card:     #13131f;
-  --clr-bg-card-2:   #1a1a2e;
+  color-scheme: dark;
+
+  /* Color palette - refined emergency dark tech theme */
+  --clr-bg:          #080a11;
+  --clr-bg-2:        #0d111c;
+  --clr-bg-card:     #111625;
+  --clr-bg-card-2:   #161c2e;
   --clr-border:      rgba(255,255,255,0.08);
-  --clr-border-2:    rgba(255,255,255,0.14);
+  --clr-border-2:    rgba(255,255,255,0.15);
 
   --clr-primary:     #FF3B3B;
   --clr-primary-dim: rgba(255,59,59,0.15);
@@ -243,8 +245,21 @@ h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); }
   box-shadow: 0 0 0 3px rgba(74,158,255,0.15);
 }
 .form-textarea { resize: vertical; min-height: 100px; }
-.form-select { appearance: none; cursor: pointer; }
-.form-select option { background: var(--clr-bg-card-2); }
+.form-select {
+  appearance: none;
+  cursor: pointer;
+  background-color: #161c2e;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px;
+  padding-right: 2.25rem;
+}
+.form-select option,
+select option {
+  background-color: #161c2e !important;
+  color: #ffffff !important;
+}
 
 .form-error {
   font-size: 0.8rem;

@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Shield, AlertTriangle, ChevronRight, Phone, Lock, CheckCircle, Clock, Info } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Shield, Phone, Lock, CheckCircle, ArrowRight, AlertTriangle } from 'lucide-react'
 import { useApp } from '../store.jsx'
 import './RoleSelect.css'
 
@@ -10,57 +9,57 @@ const ROLES = [
     label: 'Reporter',
     emoji: '📣',
     color: 'orange',
-    tagline: 'Submit and track incident reports',
-    description: 'Report what you witness. Track your submissions. Receive status updates from authorized responders.',
+    tagline: 'Witness or Involved Party',
+    description: 'Report an emergency quickly and provide incident details.',
     capabilities: [
-      'Submit emergency incident reports',
-      'Attach photos, video, and GPS location',
-      'Use voice input for hands-free reporting',
-      'View your report history and reference IDs',
-      'See status updates from responders',
+      'Instant access — no login or sign-up required',
+      'Submit emergency reports with photos & video',
+      'GPS location capture or manual address entry',
+      'Hands-free voice-to-text reporting',
       'Anonymous reporting supported',
+      'Track report status via reference ID',
     ],
-    note: null,
+    buttonText: 'Continue as Reporter',
     destination: '/report',
-    destinationLabel: 'Go to Report Form',
+    isPublic: true,
   },
   {
     id: 'responder',
     label: 'Responder',
     emoji: '🛡️',
     color: 'blue',
-    tagline: 'Review incidents and coordinate response',
-    description: 'Authorized personnel only. Access the incident dashboard, triage reports, update status, and coordinate with agencies.',
+    tagline: 'Duty Officer & Field Unit',
+    description: 'Review assigned incidents and update response progress.',
     capabilities: [
-      'View and triage incoming incident reports',
-      'Review AI-suggested categories (human decision always final)',
-      'Update incident status and add review notes',
+      'Access verified incident triage dashboard',
+      'Review AI-assisted triage suggestions',
+      'Update response status & add audit notes',
       'Coordinate with Police, Ambulance, Fire, NDRF',
-      'View full incident timelines and media',
-      'Access multi-agency coordination panel',
+      'View incident evidence and location maps',
     ],
-    note: 'Responder access requires authorization. In this demo, selecting Responder grants access. In production, role would be verified server-side.',
+    buttonText: 'Continue as Responder',
     destination: '/dashboard',
-    destinationLabel: 'Go to Dashboard',
+    isPublic: false,
+    authNote: 'Authentication & verified authorization required',
   },
   {
     id: 'admin',
     label: 'Administrator',
     emoji: '⚙️',
     color: 'purple',
-    tagline: 'Manage platform configuration and oversight',
-    description: 'Full administrative access. Review all incidents, manage users, and oversee coordination across all agencies.',
+    tagline: 'Operations & Agency Command',
+    description: 'Manage incident verification, users, service configuration, and authorized operations.',
     capabilities: [
-      'All Responder capabilities',
-      'Access coordination dashboard with full visibility',
-      'View all incidents regardless of assignment',
-      'Review audit trails and system activity',
-      'Manage service directory and platform settings',
-      'Access failed notification logs and routing status',
+      'Full administrative & multi-agency oversight',
+      'System-wide incident coordination & dispatch',
+      'Manage agency permissions and user accounts',
+      'View comprehensive audit logs & activity history',
+      'Configure platform endpoints & emergency services',
     ],
-    note: 'Administrator access is strictly controlled. In production, admin roles are granted only through secure backend processes — never self-selected.',
+    buttonText: 'Continue as Administrator',
     destination: '/coordination',
-    destinationLabel: 'Go to Coordination',
+    isPublic: false,
+    authNote: 'Strictly restricted to authorized administrative personnel',
   },
 ]
 
@@ -70,6 +69,7 @@ const COLOR_MAP = {
     bg: 'var(--clr-accent-dim)',
     text: 'var(--clr-accent)',
     badge: 'badge-orange',
+    btnClass: 'btn-accent',
     glow: 'rgba(255,140,66,0.12)',
   },
   blue: {
@@ -77,6 +77,7 @@ const COLOR_MAP = {
     bg: 'var(--clr-blue-dim)',
     text: 'var(--clr-blue)',
     badge: 'badge-blue',
+    btnClass: 'btn-primary',
     glow: 'rgba(74,158,255,0.12)',
   },
   purple: {
@@ -84,28 +85,40 @@ const COLOR_MAP = {
     bg: 'var(--clr-purple-dim)',
     text: 'var(--clr-purple)',
     badge: 'badge-purple',
+    btnClass: 'btn-purple',
     glow: 'rgba(168,85,247,0.12)',
   },
 }
 
 export default function RoleSelect() {
   const { state, setRole, toast } = useApp()
+  const { isAuthenticated, userRole, currentUser } = state
   const navigate = useNavigate()
-  const [selected, setSelected] = useState(state.userRole || null)
-  const [confirming, setConfirming] = useState(false)
 
-  const currentRole = ROLES.find(r => r.id === selected)
+  const handleRoleAction = (role) => {
+    if (role.isPublic) {
+      // Reporter: Direct access without mandatory login
+      setRole('reporter', currentUser?.name || 'Public Reporter')
+      toast('Welcome to Emergency Reporting. Stay safe.', 'info')
+      navigate('/report')
+      return
+    }
 
-  const handleConfirm = () => {
-    if (!selected || !currentRole) return
-    setConfirming(true)
-    // Brief animation delay before navigation
-    setTimeout(() => {
-      setRole(selected, state.userName)
-      toast(`Role set to ${currentRole.label}`, 'success')
-      navigate(currentRole.destination)
-      setConfirming(false)
-    }, 400)
+    // Privileged role (Responder or Admin):
+    // Check if already authenticated with appropriate role
+    if (isAuthenticated) {
+      if (userRole === role.id || (role.id === 'responder' && userRole === 'admin')) {
+        navigate(role.destination)
+        return
+      }
+      // Logged in with different role -> redirect to auth with notice
+      toast(`You are signed in as ${userRole}. Please sign in with a ${role.label} account.`, 'warning')
+      navigate(`/auth?role=${role.id}`)
+      return
+    }
+
+    // Not authenticated -> open sign-in page for requested role
+    navigate(`/auth?role=${role.id}`)
   }
 
   return (
@@ -116,114 +129,107 @@ export default function RoleSelect() {
         <div className="role-select-header fade-up">
           <div className="role-select-logo">
             <div className="role-select-logo-icon">
-              <Shield size={22} fill="white" />
+              <Shield size={24} fill="white" />
             </div>
             <span className="role-select-logo-text">RESQ<span style={{ color: 'var(--clr-primary)' }}>BRIDGE</span></span>
           </div>
-          <h1 className="role-select-title">How are you using RESQBRIDGE?</h1>
+          <h1 className="role-select-title">Smart Emergency Response Portal</h1>
           <p className="role-select-subtitle">
-            Select your role to access the appropriate features. Your role determines what you can see and do.
+            Welcome to RESQBRIDGE. Please select your role to proceed to the appropriate emergency service, incident dashboard, or administrative console.
           </p>
 
-          {/* Emergency bar — always accessible */}
-          <div className="alert alert-emergency role-emergency-bar">
-            <Phone size={14} className="alert-icon" />
-            <span style={{ fontSize: '0.8rem' }}>
-              <strong>Emergency?</strong> Call <a href="tel:112" style={{ color: 'var(--clr-primary)', fontWeight: 700 }}>112</a> — don't wait to select a role.
+          {/* Emergency Bar — India 112 Prominently Displayed */}
+          <div className="alert alert-emergency role-emergency-bar" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
+            <Phone size={16} className="alert-icon" style={{ animation: 'pulse 2s infinite' }} />
+            <span>
+              <strong>Immediate Life Threat?</strong> Call <a href="tel:112" style={{ color: 'var(--clr-primary)', fontWeight: 800, textDecoration: 'underline' }}>112</a> (National Emergency Helpline) immediately.
             </span>
           </div>
         </div>
 
-        {/* Role cards */}
+        {/* Three Role Cards Grid */}
         <div className="role-cards-grid fade-up fade-up-1">
           {ROLES.map((role) => {
             const colors = COLOR_MAP[role.color]
-            const isSelected = selected === role.id
+            const isUserCurrentRole = isAuthenticated && userRole === role.id
+
             return (
-              <button
+              <div
                 key={role.id}
-                className={`role-card${isSelected ? ' selected' : ''}`}
-                style={isSelected ? {
-                  borderColor: colors.border,
-                  background: `linear-gradient(135deg, var(--clr-bg-card) 0%, ${colors.glow} 100%)`,
-                  boxShadow: `0 0 0 2px ${colors.border}20, 0 8px 32px ${colors.glow}`,
-                } : {}}
-                onClick={() => setSelected(role.id)}
-                aria-pressed={isSelected}
-                type="button"
+                className="role-card"
+                style={{
+                  border: `2px solid ${colors.border}40`,
+                  background: `linear-gradient(145deg, var(--clr-bg-card) 0%, ${colors.glow} 100%)`,
+                }}
               >
-                {/* Selection indicator */}
-                <div className={`role-card-check ${isSelected ? 'checked' : ''}`} style={isSelected ? { borderColor: colors.border, background: colors.bg, color: colors.text } : {}}>
-                  {isSelected ? <CheckCircle size={16} /> : <span className="role-card-check-empty" />}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: '1rem' }}>
+                  <div className="role-card-icon" style={{ background: colors.bg, border: `1px solid ${colors.border}50` }}>
+                    <span style={{ fontSize: '1.85rem', lineHeight: 1 }}>{role.emoji}</span>
+                  </div>
+                  <div className={`badge ${colors.badge}`}>
+                    {role.label}
+                    {isUserCurrentRole && ' (Active)'}
+                  </div>
                 </div>
 
-                {/* Icon and label */}
-                <div className="role-card-icon" style={isSelected ? { background: colors.bg, border: `1px solid ${colors.border}40` } : {}}>
-                  <span style={{ fontSize: '1.75rem', lineHeight: 1 }}>{role.emoji}</span>
+                <h2 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-head)', marginBottom: '0.35rem', color: 'var(--clr-text)' }}>
+                  {role.label}
+                </h2>
+                <div style={{ fontSize: '0.85rem', color: colors.text, fontWeight: 600, marginBottom: '0.6rem' }}>
+                  {role.tagline}
                 </div>
+                <p className="role-card-desc" style={{ minHeight: '3rem', marginBottom: '1.25rem' }}>
+                  {role.description}
+                </p>
 
-                <div className={`badge ${colors.badge}`} style={{ marginBottom: '0.5rem' }}>{role.label}</div>
-                <h3 className="role-card-tagline" style={isSelected ? { color: colors.text } : {}}>{role.tagline}</h3>
-                <p className="role-card-desc">{role.description}</p>
-
-                {/* Capabilities */}
-                <ul className="role-capabilities">
+                {/* Capabilities list */}
+                <ul className="role-capabilities" style={{ flex: 1, marginBottom: '1.5rem', width: '100%' }}>
                   {role.capabilities.map((cap, i) => (
                     <li key={i} className="role-capability">
-                      <CheckCircle size={12} style={{ color: isSelected ? colors.text : 'var(--clr-text-faint)', flexShrink: 0 }} />
+                      <CheckCircle size={14} style={{ color: colors.text, flexShrink: 0 }} />
                       <span>{cap}</span>
                     </li>
                   ))}
                 </ul>
 
-                {/* Note for privileged roles */}
-                {role.note && (
-                  <div className="role-card-note">
-                    <Lock size={11} style={{ flexShrink: 0, color: 'var(--clr-yellow)' }} />
-                    <span>{role.note}</span>
+                {/* Authorization note */}
+                {role.authNote && (
+                  <div className="role-card-note" style={{ marginBottom: '1.25rem', width: '100%' }}>
+                    <Lock size={12} style={{ flexShrink: 0, color: 'var(--clr-yellow)' }} />
+                    <span style={{ fontSize: '0.75rem' }}>{role.authNote}</span>
                   </div>
                 )}
-              </button>
+
+                {/* Primary Button */}
+                <button
+                  id={`role-btn-${role.id}`}
+                  className={`btn ${colors.btnClass}`}
+                  style={{ width: '100%', justifyContent: 'center', padding: '0.75rem 1rem', fontSize: '0.95rem', fontWeight: 600 }}
+                  onClick={() => handleRoleAction(role)}
+                >
+                  {role.buttonText}
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             )
           })}
         </div>
 
-        {/* Confirm section */}
-        <div className={`role-confirm-section fade-up fade-up-2${selected ? ' visible' : ''}`}>
-          {selected && currentRole && (
-            <>
-              <div className="role-confirm-info">
-                <Info size={16} style={{ flexShrink: 0, color: 'var(--clr-blue)' }} />
-                <span>
-                  You selected <strong>{currentRole.label}</strong>.
-                  {' '}You'll be taken to {currentRole.destinationLabel.replace('Go to ', '')}.
-                </span>
-              </div>
-              <div className="role-confirm-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={handleConfirm}
-                  disabled={confirming}
-                  aria-busy={confirming}
-                >
-                  {confirming
-                    ? <><Clock size={14} className="spin" /> Setting role…</>
-                    : <>{currentRole.emoji} {currentRole.destinationLabel} <ChevronRight size={16} /></>
-                  }
-                </button>
-              </div>
-            </>
-          )}
+        {/* Role Security Notice */}
+        <div className="role-demo-notice fade-up fade-up-2" style={{ maxWidth: '850px', margin: '2rem auto 0' }}>
+          <AlertTriangle size={16} style={{ flexShrink: 0, color: 'var(--clr-yellow)' }} />
+          <div style={{ fontSize: '0.825rem', color: 'var(--clr-text-muted)', lineHeight: 1.5 }}>
+            <strong>Security & Role-Based Access:</strong> Selecting a role indicates your requested destination.
+            Reporter access is immediately open to all citizens for emergency reporting.
+            Responder and Administrator consoles are strictly protected and require valid authentication with verified role authorization.
+          </div>
         </div>
 
-        {/* Demo notice */}
-        <div className="role-demo-notice fade-up fade-up-3">
-          <AlertTriangle size={14} style={{ flexShrink: 0, color: 'var(--clr-yellow)' }} />
-          <span>
-            <strong>Demo platform</strong> — In production, Responder and Admin roles require verified authorization.
-            Self-selecting a privileged role is only possible here for demonstration purposes.
-            No real emergency services are contacted.
-          </span>
+        {/* Footer info link */}
+        <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+          <Link to="/about" style={{ color: 'var(--clr-text-faint)', fontSize: '0.85rem', textDecoration: 'underline' }}>
+            Learn more about the RESQBRIDGE AI Emergency Coordination System →
+          </Link>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   LayoutDashboard, Filter, Search, Clock, AlertTriangle,
   Eye, User, ChevronDown, Activity, RefreshCw
@@ -14,24 +14,23 @@ const URGENCY_FILTERS = ['all', 'critical', 'high', 'medium', 'low']
 export default function Dashboard() {
   const { state, updateReport, addTimeline, toast } = useApp()
   const { reports, userRole } = state
-  const navigate = useNavigate()
   const [search, setSearch]         = useState('')
   const [statusFilter, setStatus]   = useState('all')
   const [urgencyFilter, setUrgency] = useState('all')
   const [selected, setSelected]     = useState(null)
 
-  if (userRole === 'reporter') {
+  if (userRole === 'reporter' || !state.isAuthenticated) {
     return (
-      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
-        <div style={{ textAlign: 'center', maxWidth: '420px' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
-          <h2 style={{ marginBottom: '0.5rem' }}>Responder Access Only</h2>
-          <p className="text-muted" style={{ marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            The dashboard is available to authorized responders and admins. Use role selection to switch to Responder or Admin mode for this demo.
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', maxWidth: '440px', background: 'var(--clr-surface)', border: '1px solid var(--clr-border)', borderRadius: 'var(--radius-lg)', padding: '2.5rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🛡️</div>
+          <h2 style={{ marginBottom: '0.5rem', fontSize: '1.4rem' }}>Responder Authorization Required</h2>
+          <p className="text-muted" style={{ marginBottom: '1.5rem', fontSize: '0.875rem', lineHeight: '1.6' }}>
+            The emergency incident dashboard is restricted to verified response personnel. Please authenticate with your agency credentials.
           </p>
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            <Link to="/role-select" className="btn btn-primary">Switch Role</Link>
-            <button className="btn btn-outline" onClick={() => navigate('/')}>← Home</button>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/auth?role=responder" className="btn btn-primary btn-sm">Sign In as Responder</Link>
+            <Link to="/" className="btn btn-outline btn-sm">Role Selection</Link>
           </div>
         </div>
       </div>
@@ -77,7 +76,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2" style={{ marginBottom: '0.25rem' }}>
               <LayoutDashboard size={22} color="var(--clr-blue)" />
               <h1 style={{ fontSize: '1.75rem' }}>Responder Dashboard</h1>
-              <span className="badge badge-blue">LIVE DEMO</span>
+              <span className="badge badge-blue">DUTY CONSOLE</span>
             </div>
             <p className="text-muted" style={{ fontSize: '0.875rem' }}>Review, triage, and coordinate incident reports. All AI suggestions require human verification.</p>
           </div>

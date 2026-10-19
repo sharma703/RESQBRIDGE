@@ -131,14 +131,14 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 200;
-  min-width: 130px;
+  z-index: 9999;
+  min-width: 140px;
   list-style: none;
-  background: var(--clr-bg-card-2);
-  border: 1px solid var(--clr-border-2);
+  background: #151a2a !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: 0.3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  padding: 0.35rem;
   animation: dropIn 0.12s ease;
 }
 @keyframes dropIn {
@@ -150,18 +150,30 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.7rem;
+  padding: 0.5rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--clr-text);
+  color: #ffffff !important;
+  background: transparent;
   cursor: pointer;
-  transition: background var(--transition);
+  transition: all var(--transition);
   white-space: nowrap;
 }
-.voice-lang-option:hover { background: rgba(255,255,255,0.08); }
-.voice-lang-option.selected { background: rgba(74,158,255,0.12); color: var(--clr-blue); font-weight: 700; }
-.voice-lang-option:focus-visible { outline: 2px solid var(--clr-blue); outline-offset: -2px; border-radius: var(--radius-sm); }
+.voice-lang-option:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+.voice-lang-option.selected {
+  background: rgba(74, 158, 255, 0.22) !important;
+  color: #60a5fa !important;
+  font-weight: 700;
+}
+.voice-lang-option:focus-visible {
+  outline: 2px solid var(--clr-blue);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
 
 .voice-lang-check { color: var(--clr-blue); margin-left: auto; flex-shrink: 0; }
 

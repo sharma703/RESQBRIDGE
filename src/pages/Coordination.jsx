@@ -20,18 +20,18 @@ export default function Coordination() {
   const { reports, userRole } = state
   const [activeTab, setActiveTab] = useState('overview')
 
-  if (userRole === 'reporter') {
+  if ((userRole !== 'admin' && userRole !== 'responder') || !state.isAuthenticated) {
     return (
-      <div className="page" style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'2rem' }}>
-        <div style={{ textAlign:'center', maxWidth:'420px' }}>
-          <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>🔒</div>
-          <h2 style={{ marginBottom:'0.5rem' }}>Responder Access Only</h2>
-          <p className="text-muted" style={{ marginBottom:'1.5rem', fontSize:'0.9rem' }}>
-            Multi-agency coordination is available to authorized responders and admins. Use role selection to switch to Responder or Admin mode for this demo.
+      <div className="page" style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'80vh', padding:'2rem' }}>
+        <div style={{ textAlign:'center', maxWidth:'440px', background:'var(--clr-surface)', border:'1px solid var(--clr-border)', borderRadius:'var(--radius-lg)', padding:'2.5rem' }}>
+          <div style={{ fontSize:'2.5rem', marginBottom:'1rem' }}>🏛️</div>
+          <h2 style={{ marginBottom:'0.5rem', fontSize:'1.4rem' }}>Multi-Agency Console Restricted</h2>
+          <p className="text-muted" style={{ marginBottom:'1.5rem', fontSize:'0.875rem', lineHeight:'1.6' }}>
+            Multi-agency coordination and agency dispatch are restricted to authorized dispatchers and system administrators.
           </p>
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            <Link to="/role-select" className="btn btn-primary">Switch Role</Link>
-            <Link to="/" className="btn btn-outline">← Home</Link>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link to="/auth?role=admin" className="btn btn-primary btn-sm">Sign In as Admin</Link>
+            <Link to="/" className="btn btn-outline btn-sm">Role Selection</Link>
           </div>
         </div>
       </div>

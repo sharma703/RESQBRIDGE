@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LayoutDashboard } from 'lucide-react'
-import { Shield, AlertTriangle, Mic, Camera, MapPin, Brain, Users, CheckCircle, ArrowRight, Phone, Activity, Clock, Lock } from 'lucide-react'
+import { Shield, AlertTriangle, Mic, Camera, MapPin, Brain, Users, CheckCircle, ArrowRight, Phone, Activity, Clock, Lock, LayoutDashboard } from 'lucide-react'
 import './Landing.css'
 
 const features = [

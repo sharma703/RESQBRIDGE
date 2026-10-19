@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, Mic, MicOff, Camera, X, MapPin, ChevronRight, ChevronLeft,
   Send, Phone, CheckCircle, Upload, Video, Loader2, Info, ChevronDown
@@ -137,6 +138,7 @@ export default function ReportPage() {
   const [voiceInterim, setVoiceInterim]     = useState('') // live interim transcript preview
   const recognitionRef = useRef(null)
   const voiceGotResultRef = useRef(false)   // tracks whether we received any speech result
+  const processedFinalIndexRef = useRef(-1) // tracks highest finalized transcript index to prevent duplication
 
   // Camera refs
   const videoRef    = useRef(null)
@@ -196,6 +198,7 @@ export default function ReportPage() {
     setVoiceListening(false)
     setVoiceInterim('')
     setVoiceStatus(null)
+    processedFinalIndexRef.current = -1
   }, [])
 
   const toggleVoice = useCallback(() => {
@@ -217,13 +220,14 @@ export default function ReportPage() {
       recognitionRef.current = null
     }
 
+    processedFinalIndexRef.current = -1
+    voiceGotResultRef.current = false  // Reset for this session
+
     const rec = new SR()
     rec.lang = voiceLang
     rec.interimResults = true
     rec.continuous = true           // Keep listening until user clicks Stop
     rec.maxAlternatives = 1
-
-    voiceGotResultRef.current = false  // Reset for this session
 
     rec.onstart = () => {
       setVoiceListening(true)
@@ -232,29 +236,37 @@ export default function ReportPage() {
 
     rec.onresult = (e) => {
       voiceGotResultRef.current = true
-      // ─── DUPLICATION FIX ───────────────────────────────────────────────
-      // e.results is a cumulative list — it contains ALL results, including
-      // those already appended in previous events. e.resultIndex is the
-      // index of the first NEW result in this event. Only process from there
-      // to avoid re-appending text that was already finalized.
-      let interim = ''
       let newFinals = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const result = e.results[i]
-        if (result.isFinal) {
-          newFinals += result[0].transcript + ' '
+      let interim = ''
+
+      // Process strictly using processedFinalIndexRef so results are finalized exactly once
+      for (let i = 0; i < e.results.length; i++) {
+        const item = e.results[i]
+        if (item.isFinal) {
+          if (i > processedFinalIndexRef.current) {
+            const chunk = item[0]?.transcript?.trim() || ''
+            if (chunk) {
+              newFinals += (newFinals ? ' ' : '') + chunk
+            }
+            processedFinalIndexRef.current = i
+          }
         } else {
-          interim += result[0].transcript
+          const chunk = item[0]?.transcript?.trim() || ''
+          if (chunk) {
+            interim += (interim ? ' ' : '') + chunk
+          }
         }
       }
-      // Append only newly finalized text; show live interim separately
-      if (newFinals.trim()) {
-        setForm(f => ({
-          ...f,
-          description: f.description
-            ? f.description.trimEnd() + ' ' + newFinals.trim()
-            : newFinals.trim()
-        }))
+
+      // Append only newly finalized text; keep interim preview separate
+      if (newFinals) {
+        setForm(f => {
+          const prev = f.description ? f.description.trim() : ''
+          return {
+            ...f,
+            description: prev ? `${prev} ${newFinals}` : newFinals
+          }
+        })
         setVoiceInterim('')
       } else {
         setVoiceInterim(interim)
@@ -264,28 +276,23 @@ export default function ReportPage() {
     rec.onerror = (e) => {
       const errCode = e.error
       setVoiceInterim('')
+      setVoiceListening(false)
 
       if (errCode === 'aborted') {
-        setVoiceListening(false)
         setVoiceStatus(null)
         return
       }
       if (errCode === 'language-not-supported') {
         setVoiceLang('en-US')
       }
-      setVoiceListening(false)
       setVoiceStatus(errCode)
     }
 
     rec.onend = () => {
       setVoiceListening(false)
       setVoiceInterim('')
-      // Only clear 'listening' status if we got a result; otherwise preserve the error code
-      // that onerror set (e.g. 'no-speech')
-      setVoiceStatus(prev => {
-        if (prev === 'listening') return null   // Clean end with speech received
-        return prev                             // Keep error status
-      })
+      setVoiceStatus(prev => (prev === 'listening' ? null : prev))
+      processedFinalIndexRef.current = -1
     }
 
     recognitionRef.current = rec
@@ -382,10 +389,17 @@ export default function ReportPage() {
 
   const validateContact = (contact) => {
     if (!contact) return null                       // Optional — blank is fine
-    const digits = contact.replace(/\s/g, '')       // Strip spaces (handles pasted input)
-    if (!/^[0-9]+$/.test(digits)) return 'Enter digits only — no letters or symbols.'
-    if (digits.length < 10) return `Enter a valid 10-digit mobile number (${digits.length} digits entered).`
-    if (digits.length > 10) return `Mobile number must be exactly 10 digits (${digits.length} entered).`
+    const trimmed = contact.trim()
+    if (!trimmed) return null
+    if (!/^\d+$/.test(trimmed)) {
+      return 'Enter digits only — letters, spaces, brackets, hyphens, and symbols are not allowed.'
+    }
+    if (trimmed.length < 10) {
+      return `Mobile number must be exactly 10 digits (${trimmed.length} entered).`
+    }
+    if (trimmed.length > 10) {
+      return `Mobile number must be exactly 10 digits (${trimmed.length} entered).`
+    }
     return null
   }
 
@@ -422,45 +436,80 @@ export default function ReportPage() {
   }
   const prev = () => { setStep(s => Math.max(s - 1, 0)); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
+  const [submitError, setSubmitError] = useState(null)
+
   // ---- Submit ----
   const handleSubmit = useCallback(async () => {
-    setSubmitting(true)
-    await new Promise(r => setTimeout(r, 1800)) // Simulate network
-    const nowIso = new Date().toISOString()
-    const report = {
-      reportedAt: nowIso,
-      category: form.category,
-      subCategory: form.subCategory,
-      urgency: form.urgency || 'medium',
-      description: form.description,
-      location: {
-        lat: location.lat, lng: location.lng,
-        address: location.address, landmark: location.landmark,
-        floor: location.floor, room: location.room
-      },
-      status: 'submitted',
-      reporter: {
-        name: form.anonymous ? 'Anonymous' : (form.reporterName || state.userName),
-        anonymous: form.anonymous,
-        contact: form.anonymous ? '' : form.reporterContact
-      },
-      media: mediaItems.map(m => ({ type: m.type, url: m.url, name: m.name })),
-      aiSummary: generateAISummary(form, location),
-      aiCategory: form.category,
-      aiUrgency: form.urgency || 'medium',
-      aiConfidence: 0.82,
-      reviewNotes: [],
-      assignedTo: null,
-      agencies: Object.fromEntries(AGENCIES.map(a => [a.id, selectedAgencies.includes(a.id) ? 'pending' : null])),
-      timeline: [
-        { at: nowIso, event: 'Report submitted', by: form.anonymous ? 'Anonymous' : (form.reporterName || state.userName) },
-        { at: nowIso, event: `AI triage — ${form.urgency || 'Medium'} / ${form.category}`, by: 'System (AI) [SIMULATED]' },
-      ]
+    if (submitting) return // Prevent duplicate clicks while submitting
+    setSubmitError(null)
+
+    // Validate required fields
+    if (!form.category || !form.description?.trim()) {
+      toast('Please choose a category and provide an incident description.', 'error')
+      setStep(0)
+      return
     }
-    addReport(report)
-    setSubmitted(report)
-    setSubmitting(false)
-  }, [addReport, form, location, mediaItems, selectedAgencies, state.userName])
+
+    // Validate optional contact number if entered
+    if (!form.anonymous && form.reporterContact) {
+      const contactErr = validateContact(form.reporterContact)
+      if (contactErr) {
+        setErrors(e => ({ ...e, reporterContact: contactErr }))
+        toast(contactErr, 'error')
+        setStep(0)
+        return
+      }
+    }
+
+    setSubmitting(true)
+    try {
+      await new Promise(r => setTimeout(r, 1200)) // Safe simulated async network delay
+      const nowIso = new Date().toISOString()
+      const reportNumber = String(state.reports.length + 1).padStart(3, '0')
+      const reportId = `RB-${new Date().getFullYear()}-${reportNumber}`
+      const report = {
+        id: reportId,
+        reportedAt: nowIso,
+        category: form.category,
+        subCategory: form.subCategory,
+        urgency: form.urgency || 'medium',
+        description: form.description,
+        location: {
+          lat: location.lat, lng: location.lng,
+          address: location.address, landmark: location.landmark,
+          floor: location.floor, room: location.room
+        },
+        status: 'submitted',
+        reporter: {
+          name: form.anonymous ? 'Anonymous' : (form.reporterName || state.userName),
+          anonymous: form.anonymous,
+          contact: form.anonymous ? '' : form.reporterContact
+        },
+        media: mediaItems.map(m => ({ type: m.type, url: m.url, name: m.name })),
+        aiSummary: generateAISummary(form, location),
+        aiCategory: form.category,
+        aiUrgency: form.urgency || 'medium',
+        aiConfidence: 0.82,
+        reviewNotes: [],
+        assignedTo: null,
+        agencies: Object.fromEntries(AGENCIES.map(a => [a.id, selectedAgencies.includes(a.id) ? 'pending' : null])),
+        timeline: [
+          { at: nowIso, event: 'Report submitted', by: form.anonymous ? 'Anonymous' : (form.reporterName || state.userName) },
+          { at: nowIso, event: `AI triage — ${form.urgency || 'Medium'} / ${form.category}`, by: 'System (AI) [SIMULATED]' },
+        ]
+      }
+      addReport(report)
+      setSubmitted(report)
+      toast(`Emergency report recorded (${report.id})`, 'success')
+    } catch (err) {
+      console.error('Report submission error:', err)
+      const msg = err?.message || 'Failed to submit report. Please check your connection and retry.'
+      setSubmitError(msg)
+      toast(msg, 'error')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [submitting, form, location, mediaItems, selectedAgencies, state.reports.length, state.userName, toast, addReport])
 
   if (submitted) return <SubmitSuccess report={submitted} onNew={() => { setSubmitted(null); setStep(0); setForm({ category:'',subCategory:'',urgency:'',description:'',reporterName:'',reporterContact:'',anonymous:false }); setLocation({ lat:null,lng:null,address:'',landmark:'',floor:'',room:'',accuracy:null,loading:false,error:null,manual:false }); setMediaItems([]); setSelectedAgencies([]) }} />
 
@@ -681,16 +730,20 @@ export default function ReportPage() {
                       placeholder="10-digit mobile (optional)"
                       type="tel"
                       inputMode="numeric"
-                      maxLength={12}  /* 10 digits + up to 2 spaces */
+                      maxLength={10}
                       autoComplete="tel"
                       value={form.reporterContact}
                       onChange={e => {
-                        const val = e.target.value
-                        setForm(f => ({ ...f, reporterContact: val }))
-                        // Live-clear the error once valid
-                        if (errors.reporterContact) {
-                          const err = validateContact(val)
-                          setErrors(prev => ({ ...prev, reporterContact: err || undefined }))
+                        const raw = e.target.value
+                        const digitsOnly = raw.replace(/\D/g, '').slice(0, 10)
+                        setForm(f => ({ ...f, reporterContact: digitsOnly }))
+
+                        if (raw !== digitsOnly) {
+                          setErrors(prev => ({ ...prev, reporterContact: 'Enter digits only — letters, spaces, brackets, hyphens, and symbols are not allowed.' }))
+                        } else if (digitsOnly.length > 0 && digitsOnly.length < 10) {
+                          setErrors(prev => ({ ...prev, reporterContact: `Mobile number must be exactly 10 digits (${digitsOnly.length} entered).` }))
+                        } else {
+                          setErrors(prev => { const n = { ...prev }; delete n.reporterContact; return n })
                         }
                       }}
                     />
@@ -699,7 +752,7 @@ export default function ReportPage() {
                     )}
                     {!errors.reporterContact && form.reporterContact && (
                       <div style={{ fontSize:'0.72rem', color:'var(--clr-text-faint)', marginTop:'0.2rem' }}>
-                        {form.reporterContact.replace(/\s/g,'').length}/10 digits
+                        {form.reporterContact.length}/10 digits
                       </div>
                     )}
                   </div>
@@ -920,6 +973,15 @@ export default function ReportPage() {
               Check everything below. AI will analyze the report after submission — you can correct any AI suggestions from the responder view.
             </p>
 
+            {submitError && (
+              <div className="alert alert-emergency" style={{ marginBottom: '1.25rem' }}>
+                <AlertTriangle size={16} className="alert-icon" />
+                <span style={{ fontSize: '0.85rem' }}>
+                  <strong>Submission Failed:</strong> {submitError} Your report details are preserved below. Please click Submit Report to retry.
+                </span>
+              </div>
+            )}
+
             <div className="review-card">
               <div className="review-section">
                 <div className="review-label">Category</div>
@@ -1039,22 +1101,66 @@ export default function ReportPage() {
 function SubmitSuccess({ report, onNew }) {
   const navigate = useNavigate()
   return (
-    <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '2rem' }}>
-      <div className="success-screen fade-up">
-        <div className="success-icon"><CheckCircle size={48} /></div>
-        <h2>Report Submitted</h2>
-        <div className="badge badge-blue" style={{ margin: '0.75rem auto', display: 'inline-flex' }}>Ref: {report.id}</div>
-        <p className="text-muted">
-          Your report has been received by RESQBRIDGE and is awaiting human review.
-          Track its status in <strong>My Reports</strong>.
-        </p>
-        <div className="alert alert-emergency" style={{ marginTop: '1.5rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-          <Phone size={16} className="alert-icon" />
-          <span><strong>If you need immediate help, call <a href="tel:112" style={{ color: 'var(--clr-primary)' }}>112</a> now.</strong> This platform does not dispatch emergency services.</span>
+    <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '85vh', padding: '2rem 1rem' }}>
+      <div className="success-screen fade-up" style={{ maxWidth: '540px', width: '100%', background: 'var(--clr-surface)', border: '1px solid var(--clr-border)', borderRadius: 'var(--radius-lg)', padding: '2rem' }}>
+        <div className="success-icon" style={{ color: 'var(--clr-green, #10b981)', marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+          <CheckCircle size={52} />
         </div>
+        <h2 style={{ fontSize: '1.6rem', textAlign: 'center', marginBottom: '0.25rem' }}>Report Submitted Successfully</h2>
+        <div style={{ textAlign: 'center', margin: '0.75rem 0' }}>
+          <span className="badge badge-blue" style={{ fontSize: '0.85rem', padding: '0.35rem 0.75rem', fontWeight: 700 }}>
+            Reference ID: {report?.id || 'Recorded'}
+          </span>
+        </div>
+        <p className="text-muted" style={{ textAlign: 'center', fontSize: '0.875rem', lineHeight: '1.6', marginBottom: '1.25rem' }}>
+          Your emergency report has been safely logged in the system. Authorized responders have been notified for triage.
+        </p>
+
+        {/* Report Summary Card */}
+        {report && (
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--clr-border)', borderRadius: 'var(--radius-md)', padding: '1rem', marginBottom: '1.25rem', fontSize: '0.825rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <span className="text-muted">Category:</span>
+              <strong style={{ color: 'var(--clr-text)', textTransform: 'capitalize' }}>{report.category || 'Incident'}</strong>
+            </div>
+            {report.urgency && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span className="text-muted">Urgency:</span>
+                <span className={`badge badge-${report.urgency === 'critical' ? 'red' : report.urgency === 'high' ? 'orange' : 'yellow'}`}>
+                  {report.urgency.toUpperCase()}
+                </span>
+              </div>
+            )}
+            {report.location?.address && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <span className="text-muted">Location:</span>
+                <span style={{ maxWidth: '60%', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  📍 {report.location.address}
+                </span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span className="text-muted">Reporter:</span>
+              <span>{report.reporter?.anonymous ? '🔒 Anonymous Citizen' : (report.reporter?.name || 'Citizen')}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="alert alert-emergency" style={{ marginBottom: '1.5rem', textAlign: 'left', fontSize: '0.825rem' }}>
+          <Phone size={16} className="alert-icon" />
+          <span><strong>Active Emergency?</strong> In immediate life-threatening situations, call <a href="tel:112" style={{ color: 'var(--clr-primary)', fontWeight: 700 }}>112</a> immediately.</span>
+        </div>
+
         <div className="flex gap-2" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button className="btn btn-primary" onClick={() => navigate('/my-reports')}>View My Reports</button>
-          <button className="btn btn-outline" onClick={onNew}>Submit Another</button>
+          <button className="btn btn-primary" onClick={() => navigate('/my-reports')}>
+            View My Reports
+          </button>
+          <button className="btn btn-outline" onClick={onNew}>
+            Submit Another Report
+          </button>
+          <button className="btn btn-outline" onClick={() => navigate('/')}>
+            Return Home
+          </button>
         </div>
       </div>
     </div>

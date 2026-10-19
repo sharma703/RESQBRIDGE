@@ -108,7 +108,9 @@ const initialState = {
     }
   ],
 
-  // Current user role (simulated)
+  // Authentication & Role
+  isAuthenticated: false,
+  currentUser: null, // { email, name, role, provider }
   userRole: 'reporter', // 'reporter' | 'responder' | 'admin'
   userName: 'Guest',
 }
@@ -122,7 +124,8 @@ function reducer(state, action) {
       return { ...state, toasts: state.toasts.filter(t => t.id !== action.id) }
 
     case 'ADD_REPORT': {
-      const report = { ...action.payload, id: `RB-2024-${String(state.reports.length + 1).padStart(3,'0')}` }
+      const reportId = action.payload.id || `RB-2024-${String(state.reports.length + 1).padStart(3, '0')}`
+      const report = { ...action.payload, id: reportId }
       return { ...state, reports: [report, ...state.reports] }
     }
     case 'UPDATE_REPORT':
@@ -137,6 +140,22 @@ function reducer(state, action) {
           ? { ...r, timeline: [...r.timeline, { at: new Date().toISOString(), ...action.event }] }
           : r
         )
+      }
+    case 'LOGIN_SUCCESS':
+      return {
+        ...state,
+        isAuthenticated: true,
+        currentUser: action.user,
+        userRole: action.user.role,
+        userName: action.user.name || action.user.email.split('@')[0],
+      }
+    case 'LOGOUT':
+      return {
+        ...state,
+        isAuthenticated: false,
+        currentUser: null,
+        userRole: 'reporter',
+        userName: 'Guest',
       }
     case 'SET_ROLE':
       return { ...state, userRole: action.role, userName: action.name || state.userName }
@@ -174,11 +193,19 @@ export function AppProvider({ children }) {
     dispatch({ type: 'SET_ROLE', role, name })
   }, [])
 
+  const login = useCallback((user) => {
+    dispatch({ type: 'LOGIN_SUCCESS', user })
+  }, [])
+
+  const logout = useCallback(() => {
+    dispatch({ type: 'LOGOUT' })
+  }, [])
+
   // Persist state to localStorage whenever it changes
   useEffect(() => { saveToStorage(state) }, [state])
 
   return (
-    <AppContext.Provider value={{ state, dispatch, toast, addReport, updateReport, addTimeline, setRole }}>
+    <AppContext.Provider value={{ state, dispatch, toast, addReport, updateReport, addTimeline, setRole, login, logout }}>
       {children}
     </AppContext.Provider>
   )

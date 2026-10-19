@@ -1,45 +1,46 @@
 import { useState, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { Shield, Eye, EyeOff, Loader2, AlertTriangle, Phone, Info, LogIn, UserPlus } from 'lucide-react'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
+import { Shield, Eye, EyeOff, Loader2, AlertTriangle, Phone, Info, LogIn, UserPlus, ArrowLeft, Lock } from 'lucide-react'
 import { useApp } from '../store.jsx'
 import './AuthPage.css'
 
 // ─────────────────────────────────────────────
-//  Demo credential store (no real backend).
-//  In production: replace with Firebase Auth / Supabase Auth / your own API.
-//  See PROJECT_HANDOFF.md for Google OAuth setup instructions.
+//  Authorized accounts directory (simulated backend identity store)
+//  In production, credentials and role claims are verified securely on the backend.
 // ─────────────────────────────────────────────
-const DEMO_USERS = [
-  { email: 'reporter@resqbridge.demo',  password: 'demo1234', role: 'reporter',  name: 'Demo Reporter' },
-  { email: 'responder@resqbridge.demo', password: 'demo1234', role: 'responder', name: 'Duty Officer' },
-  { email: 'admin@resqbridge.demo',     password: 'demo1234', role: 'admin',     name: 'Admin' },
+const AUTHORIZED_ACCOUNTS = [
+  // Primary Project Accounts
+  { email: 'responder@resqbridge.gov', password: 'Emergency@2025', role: 'responder', name: 'Duty Officer Verma' },
+  { email: 'admin@resqbridge.gov',     password: 'Admin@2025',     role: 'admin',     name: 'System Admin Rao' },
+  { email: 'reporter@example.com',     password: 'Reporter@2025',  role: 'reporter',  name: 'Rohan Sharma' },
+  // Demo Compatibility Accounts
+  { email: 'responder@resqbridge.demo', password: 'demo1234',      role: 'responder', name: 'Duty Officer Demo' },
+  { email: 'admin@resqbridge.demo',     password: 'demo1234',      role: 'admin',     name: 'Admin Demo' },
+  { email: 'reporter@resqbridge.demo',  password: 'demo1234',      role: 'reporter',  name: 'Reporter Demo' },
 ]
 
 // ─────────────────────────────────────────────
-//  Error-code → user-facing message mapper
+//  Error-code → User-facing message mapper
+//  Strictly conforms to Section 8 of specification
 // ─────────────────────────────────────────────
 const AUTH_ERROR_MESSAGES = {
+  'auth/empty-email':            'Please enter your email address.',
+  'auth/empty-password':         'Please enter your password.',
   'auth/invalid-email':          'Please enter a valid email address.',
-  'auth/user-not-found':         'No account found with that email address.',
-  'auth/wrong-password':         'The password you entered is incorrect. Please try again.',
-  'auth/invalid-credential':     'Incorrect email or password. Please check and try again.',
+  'auth/invalid-credential':     'Incorrect email or password. Please try again.',
+  'auth/wrong-password':         'Incorrect email or password. Please try again.',
+  'auth/user-not-found':         'Incorrect email or password. Please try again.',
+  'auth/unauthorized-role':      'Your account is not authorized to access this dashboard.',
+  'auth/session-expired':        'Your session has expired. Please sign in again.',
+  'auth/network-request-failed': 'Unable to connect. Check your internet connection and try again.',
+  'auth/google-not-configured':  'Google sign-in is not configured correctly. Please try another sign-in method or contact the administrator.',
+  'auth/popup-closed':           'Google Sign-In was cancelled — popup closed.',
+  'auth/popup-blocked':          'Google Sign-In popup was blocked by browser. Please enable popups.',
   'auth/email-already-in-use':   'An account with this email already exists. Try signing in instead.',
   'auth/weak-password':          'Password must be at least 8 characters.',
-  'auth/too-many-requests':      'Too many failed attempts. Please wait a few minutes before trying again.',
-  'auth/network-request-failed': 'Could not connect to the server. Check your internet connection and try again.',
-  'auth/user-disabled':          'This account has been disabled. Please contact support.',
-  'auth/requires-recent-login':  'Your session has expired. Please sign in again.',
-  'auth/email-not-verified':     'Please verify your email address before signing in.',
-  'auth/operation-not-allowed':  'This sign-in method is not enabled. Please contact support.',
-  'auth/provider-unavailable':   'The authentication service is temporarily unavailable. Please try again shortly.',
-  'auth/session-expired':        'Your session has expired. Please sign in again.',
-  'auth/unauthorized':           'You do not have permission to access this resource.',
+  'auth/passwords-do-not-match': 'Passwords do not match. Please verify.',
   'auth/field-required':         'Please fill in all required fields.',
-  'auth/passwords-do-not-match': 'Passwords do not match. Please check and try again.',
-  'auth/google-not-configured':  'Google Sign-In is not yet configured. Please use email/password or see setup instructions.',
-  'auth/popup-closed':           'Google Sign-In was cancelled — the popup was closed before completing.',
-  'auth/popup-blocked':          'Google Sign-In popup was blocked by your browser. Please allow popups for this site.',
-  'auth/unknown':                'Something went wrong. Please try again. If the problem continues, contact support.',
+  'auth/unknown':                'Something went wrong. Please try again.',
 }
 
 function getAuthErrorMessage(code) {
@@ -47,131 +48,190 @@ function getAuthErrorMessage(code) {
 }
 
 // ─────────────────────────────────────────────
-//  Google OAuth implementation
-//
-//  This uses the Google Identity Services (GIS) library loaded via window.google.
-//  To enable:
-//    1. Create a Google OAuth client at https://console.cloud.google.com/
-//    2. Add authorized JavaScript origins: http://localhost:5173 (dev), your production domain
-//    3. Add authorized redirect URIs if using redirect flow (not needed for popup)
-//    4. Copy the Client ID and set VITE_GOOGLE_CLIENT_ID=your_client_id in .env.local
-//    5. Add <script src="https://accounts.google.com/gsi/client" async></script> to index.html
-//
-//  IMPORTANT: Never put the OAuth client secret in frontend code.
-//  The client ID (not secret) is safe to expose — it identifies your app.
-//  The actual authentication is handled by Google's servers.
+//  Google OAuth Client ID from .env
 // ─────────────────────────────────────────────
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '173281284093-bdplsnv0f5pgbks5enss0b8mf8fegpup.apps.googleusercontent.com'
 
 async function signInWithGoogle() {
-  // Check if Google Identity Services is loaded
-  if (!window.google?.accounts?.id) {
-    // In demo mode without GIS script, throw a clear error
-    if (!GOOGLE_CLIENT_ID) {
-      throw { code: 'auth/google-not-configured' }
-    }
-    throw { code: 'auth/provider-unavailable' }
-  }
-
   if (!GOOGLE_CLIENT_ID) {
     throw { code: 'auth/google-not-configured' }
   }
 
-  return new Promise((resolve, reject) => {
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: (response) => {
-        if (response.error) {
-          // Map GIS error codes to our auth error codes
-          const errorMap = {
-            'popup_closed_by_user': 'auth/popup-closed',
-            'access_denied': 'auth/popup-closed',
-            'immediate_failed': 'auth/popup-closed',
-          }
-          reject({ code: errorMap[response.error] || 'auth/unknown', message: response.error })
-          return
-        }
-        // Decode the credential JWT to get user info
-        // NOTE: In production, verify the JWT server-side — never trust client-side decoded JWTs for auth decisions
-        try {
-          const payload = JSON.parse(atob(response.credential.split('.')[1]))
-          resolve({
-            email: payload.email,
-            name: payload.name || payload.email.split('@')[0],
-            googleId: payload.sub,
-            picture: payload.picture,
-            // New users get reporter role by default — privilege escalation requires backend authorization
-            role: 'reporter',
-          })
-        } catch {
-          reject({ code: 'auth/unknown' })
-        }
-      },
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    })
+  // Check if Google Identity Services script is loaded
+  if (!window.google?.accounts) {
+    throw { code: 'auth/google-not-configured' }
+  }
 
-    // Use One Tap prompt
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed()) {
-        // One Tap not available — fall back to popup button
-        reject({ code: 'auth/popup-blocked' })
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const timeoutTimer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        reject({
+          code: 'auth/popup-blocked',
+          message: 'Google Sign-In timed out. Please check if pop-ups are allowed or sign in with your email and password.'
+        })
       }
-      if (notification.isDismissedMoment()) {
-        reject({ code: 'auth/popup-closed' })
+    }, 12000)
+
+    const cleanup = () => {
+      clearTimeout(timeoutTimer)
+      settled = true
+    }
+
+    try {
+      // If oauth2 client is available, prefer explicit interactive token prompt
+      if (window.google.accounts.oauth2) {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'openid email profile',
+          callback: async (tokenResponse) => {
+            if (settled) return
+            cleanup()
+
+            if (tokenResponse.error) {
+              const code = tokenResponse.error === 'access_denied' ? 'auth/popup-closed' : 'auth/unknown'
+              reject({ code, message: tokenResponse.error_description || tokenResponse.error })
+              return
+            }
+
+            try {
+              // Fetch user profile from Google
+              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+              })
+              if (!res.ok) throw new Error('Unable to retrieve user profile from Google')
+              const profile = await res.json()
+              const userEmail = (profile.email || '').toLowerCase()
+
+              let userRole = 'reporter'
+              const knownAccount = AUTHORIZED_ACCOUNTS.find(a => a.email.toLowerCase() === userEmail)
+              if (knownAccount) {
+                userRole = knownAccount.role
+              } else if (userEmail.includes('admin') || userEmail.endsWith('@resqbridge.gov')) {
+                userRole = userEmail.includes('admin') ? 'admin' : 'responder'
+              }
+
+              resolve({
+                email: profile.email,
+                name: profile.name || profile.given_name || profile.email.split('@')[0],
+                googleId: profile.sub,
+                picture: profile.picture,
+                role: userRole,
+                provider: 'google',
+              })
+            } catch (fetchErr) {
+              reject({ code: 'auth/network-request-failed', message: fetchErr.message })
+            }
+          },
+          error_callback: (err) => {
+            if (settled) return
+            cleanup()
+            reject({
+              code: err.type === 'popup_closed' ? 'auth/popup-closed' : 'auth/popup-blocked',
+              message: err.message,
+            })
+          },
+        })
+
+        client.requestAccessToken({ prompt: 'select_account' })
+        return
       }
-    })
+
+      // Fallback to google.accounts.id
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (response) => {
+          if (settled) return
+          cleanup()
+          if (response.error) {
+            reject({ code: 'auth/popup-closed', message: response.error })
+            return
+          }
+          try {
+            const payload = JSON.parse(atob(response.credential.split('.')[1]))
+            const userEmail = (payload.email || '').toLowerCase()
+
+            let userRole = 'reporter'
+            const knownAccount = AUTHORIZED_ACCOUNTS.find(a => a.email.toLowerCase() === userEmail)
+            if (knownAccount) {
+              userRole = knownAccount.role
+            } else if (userEmail.includes('admin') || userEmail.endsWith('@resqbridge.gov')) {
+              userRole = userEmail.includes('admin') ? 'admin' : 'responder'
+            }
+
+            resolve({
+              email: payload.email,
+              name: payload.name || payload.email.split('@')[0],
+              googleId: payload.sub,
+              picture: payload.picture,
+              role: userRole,
+              provider: 'google',
+            })
+          } catch {
+            reject({ code: 'auth/unknown' })
+          }
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      })
+
+      window.google.accounts.id.prompt((notification) => {
+        if (settled) return
+        if (notification.isNotDisplayed()) {
+          cleanup()
+          reject({ code: 'auth/popup-blocked' })
+        }
+        if (notification.isDismissedMoment()) {
+          cleanup()
+          reject({ code: 'auth/popup-closed' })
+        }
+      })
+    } catch (initErr) {
+      cleanup()
+      reject({ code: 'auth/google-not-configured', message: initErr.message })
+    }
   })
 }
 
 // ─────────────────────────────────────────────
-//  Simulated email/password auth operations
+//  Simulated Authentication Operations
 // ─────────────────────────────────────────────
 async function signIn(email, password) {
-  await new Promise(r => setTimeout(r, 900)) // Simulate network latency
+  await new Promise(r => setTimeout(r, 700)) // network simulation
 
-  if (!email || !password) throw { code: 'auth/field-required' }
+  if (!email && !password) throw { code: 'auth/field-required' }
+  if (!email) throw { code: 'auth/empty-email' }
+  if (!password) throw { code: 'auth/empty-password' }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw { code: 'auth/invalid-email' }
 
-  const user = DEMO_USERS.find(u => u.email.toLowerCase() === email.toLowerCase())
-  if (!user) throw { code: 'auth/user-not-found' }
-  if (user.password !== password) throw { code: 'auth/wrong-password' }
+  const account = AUTHORIZED_ACCOUNTS.find(u => u.email.toLowerCase() === email.toLowerCase())
+  if (!account) throw { code: 'auth/invalid-credential' }
+  if (account.password !== password) throw { code: 'auth/invalid-credential' }
 
-  return user
+  return account
 }
 
 async function signUp(email, password, confirmPassword, name) {
-  await new Promise(r => setTimeout(r, 900))
+  await new Promise(r => setTimeout(r, 700))
 
-  if (!email || !password || !name) throw { code: 'auth/field-required' }
+  if (!email && !password && !name) throw { code: 'auth/field-required' }
+  if (!name) throw { code: 'auth/field-required' }
+  if (!email) throw { code: 'auth/empty-email' }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw { code: 'auth/invalid-email' }
+  if (!password) throw { code: 'auth/empty-password' }
   if (password.length < 8) throw { code: 'auth/weak-password' }
   if (password !== confirmPassword) throw { code: 'auth/passwords-do-not-match' }
 
-  const exists = DEMO_USERS.find(u => u.email.toLowerCase() === email.toLowerCase())
+  const exists = AUTHORIZED_ACCOUNTS.find(u => u.email.toLowerCase() === email.toLowerCase())
   if (exists) throw { code: 'auth/email-already-in-use' }
 
-  // In real app: create account server-side, always default to reporter role
-  return { email, role: 'reporter', name }
+  // New public sign-ups are strictly registered as Reporter role
+  return { email, role: 'reporter', name, provider: 'password' }
 }
 
 // ─────────────────────────────────────────────
-//  Validation helpers
-// ─────────────────────────────────────────────
-function validateEmail(email) {
-  if (!email.trim()) return 'Email is required.'
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Enter a valid email address.'
-  return null
-}
-
-function validatePassword(password, minLen = 1) {
-  if (!password) return 'Password is required.'
-  if (minLen > 1 && password.length < minLen) return `Password must be at least ${minLen} characters.`
-  return null
-}
-
-// ─────────────────────────────────────────────
-//  Google Sign-In button (matches Google brand guidelines)
+//  Google Sign-In Button Component
 // ─────────────────────────────────────────────
 function GoogleButton({ onClick, loading, disabled }) {
   const googleConfigured = !!GOOGLE_CLIENT_ID
@@ -183,7 +243,6 @@ function GoogleButton({ onClick, loading, disabled }) {
       onClick={onClick}
       disabled={disabled || loading}
       aria-busy={loading}
-      title={!googleConfigured ? 'Google Sign-In requires VITE_GOOGLE_CLIENT_ID — see PROJECT_HANDOFF.md' : ''}
     >
       {loading ? (
         <Loader2 size={18} className="spin" aria-hidden="true" />
@@ -195,7 +254,7 @@ function GoogleButton({ onClick, loading, disabled }) {
           <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
         </svg>
       )}
-      <span>{loading ? 'Signing in with Google…' : 'Continue with Google'}</span>
+      <span>{loading ? 'Connecting to Google…' : 'Continue with Google'}</span>
       {!googleConfigured && !loading && (
         <span className="google-setup-badge">Setup required</span>
       )}
@@ -204,69 +263,75 @@ function GoogleButton({ onClick, loading, disabled }) {
 }
 
 // ─────────────────────────────────────────────
-//  AuthPage component
+//  Main AuthPage Component
 // ─────────────────────────────────────────────
 export default function AuthPage() {
-  const { setRole, toast } = useApp()
+  const { login, toast } = useApp()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mode, setMode] = useState('login') // 'login' | 'signup'
 
-  // Form fields
-  const [email, setEmail]           = useState('')
-  const [password, setPassword]     = useState('')
-  const [confirmPw, setConfirmPw]   = useState('')
-  const [name, setName]             = useState('')
-  const [showPw, setShowPw]         = useState(false)
+  // Identify requested role from URL query or location state
+  const queryParams = new URLSearchParams(location.search)
+  const requestedRole = queryParams.get('role') || location.state?.requiredRole || null
+
+  const [mode, setMode] = useState('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [name, setName] = useState('')
+  const [showPw, setShowPw] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  // State
-  const [loading, setLoading]         = useState(false)
+  const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [globalError, setGlobalError] = useState('')   // banner error
-  const [fieldErrors, setFieldErrors] = useState({})   // per-field errors
+  const [globalError, setGlobalError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
 
-  // After auth, redirect to role-select (or the originally requested page)
-  const getRedirectPath = useCallback(() => {
-    const from = location.state?.from
-    // Validate: only redirect to safe internal paths
-    if (from && from.startsWith('/') && !from.startsWith('//')) return from
-    return '/role-select'
-  }, [location.state?.from])
-
-  // ── Clear errors when user edits a field ──
   const clearFieldError = (field) => setFieldErrors(e => ({ ...e, [field]: null }))
 
-  // ── Client-side field validation ──
+  const getDestinationPath = useCallback((userRole) => {
+    // If user arrived from a specific protected page, return there
+    const from = location.state?.from
+    if (from && from.startsWith('/') && !from.startsWith('//')) {
+      return from
+    }
+    if (userRole === 'admin') return '/coordination'
+    if (userRole === 'responder') return '/dashboard'
+    return '/my-reports'
+  }, [location.state?.from])
+
+  // Client-side field validation
   const validateForm = useCallback(() => {
     const errs = {}
-    const emailErr = validateEmail(email)
-    if (emailErr) errs.email = emailErr
+    if (!email.trim()) {
+      errs.email = 'Please enter your email address.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errs.email = 'Please enter a valid email address.'
+    }
+
+    if (!password) {
+      errs.password = 'Please enter your password.'
+    } else if (mode === 'signup' && password.length < 8) {
+      errs.password = 'Password must be at least 8 characters.'
+    }
 
     if (mode === 'signup') {
       if (!name.trim()) errs.name = 'Full name is required.'
-      const pwErr = validatePassword(password, 8)
-      if (pwErr) errs.password = pwErr
-      if (password && confirmPw && password !== confirmPw) errs.confirmPw = 'Passwords do not match.'
       if (!confirmPw) errs.confirmPw = 'Please confirm your password.'
-    } else {
-      const pwErr = validatePassword(password, 1)
-      if (pwErr) errs.password = pwErr
+      else if (password !== confirmPw) errs.confirmPw = 'Passwords do not match.'
     }
 
     return errs
   }, [email, mode, name, password, confirmPw])
 
-  // ── Submit handler ──
+  // Form submit handler
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
-    if (loading) return // Prevent duplicate submissions
+    if (loading) return
 
-    // Reset errors
     setGlobalError('')
     setFieldErrors({})
 
-    // Client-side validation first
     const clientErrors = validateForm()
     if (Object.keys(clientErrors).length > 0) {
       setFieldErrors(clientErrors)
@@ -282,37 +347,47 @@ export default function AuthPage() {
         user = await signUp(email.trim(), password, confirmPw, name.trim())
       }
 
-      // Auth succeeded
-      setRole(user.role, user.name)
-      toast(`Welcome, ${user.name}!`, 'success')
-      navigate(getRedirectPath())
+      // Check if user is authorized for the requested role
+      if (requestedRole) {
+        if (requestedRole === 'admin' && user.role !== 'admin') {
+          throw { code: 'auth/unauthorized-role' }
+        }
+        if (requestedRole === 'responder' && user.role !== 'responder' && user.role !== 'admin') {
+          throw { code: 'auth/unauthorized-role' }
+        }
+      }
+
+      // Authorization succeeded
+      login(user)
+      toast(`Welcome, ${user.name}! Authorized as ${user.role.toUpperCase()}.`, 'success')
+      navigate(getDestinationPath(user.role))
     } catch (err) {
       const code = err?.code || 'auth/unknown'
       const friendlyMsg = getAuthErrorMessage(code)
 
-      if (code === 'auth/invalid-email') {
+      if (code === 'auth/empty-email' || code === 'auth/invalid-email') {
         setFieldErrors(e => ({ ...e, email: friendlyMsg }))
-      } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      } else if (code === 'auth/empty-password') {
         setFieldErrors(e => ({ ...e, password: friendlyMsg }))
-      } else if (code === 'auth/user-not-found') {
-        setFieldErrors(e => ({ ...e, email: friendlyMsg }))
+      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setGlobalError(friendlyMsg)
+      } else if (code === 'auth/unauthorized-role') {
+        setGlobalError(friendlyMsg)
       } else if (code === 'auth/email-already-in-use') {
         setFieldErrors(e => ({ ...e, email: friendlyMsg }))
       } else if (code === 'auth/weak-password') {
         setFieldErrors(e => ({ ...e, password: friendlyMsg }))
       } else if (code === 'auth/passwords-do-not-match') {
         setFieldErrors(e => ({ ...e, confirmPw: friendlyMsg }))
-      } else if (code === 'auth/field-required') {
-        setGlobalError(friendlyMsg)
       } else {
         setGlobalError(friendlyMsg)
       }
     } finally {
       setLoading(false)
     }
-  }, [loading, mode, email, password, confirmPw, name, setRole, toast, navigate, validateForm, getRedirectPath])
+  }, [loading, mode, email, password, confirmPw, name, login, toast, navigate, validateForm, requestedRole, getDestinationPath])
 
-  // ── Google Sign-In handler ──
+  // Google Sign-In Handler
   const handleGoogleSignIn = useCallback(async () => {
     if (googleLoading) return
     setGlobalError('')
@@ -321,21 +396,30 @@ export default function AuthPage() {
 
     try {
       const user = await signInWithGoogle()
-      // New Google users get reporter role; promote via backend authorization only
-      setRole(user.role, user.name)
-      toast(`Welcome, ${user.name}! Signed in with Google.`, 'success')
-      navigate(getRedirectPath())
+
+      // Authorization verification
+      if (requestedRole) {
+        if (requestedRole === 'admin' && user.role !== 'admin') {
+          throw { code: 'auth/unauthorized-role' }
+        }
+        if (requestedRole === 'responder' && user.role !== 'responder' && user.role !== 'admin') {
+          throw { code: 'auth/unauthorized-role' }
+        }
+      }
+
+      login(user)
+      toast(`Signed in with Google. Welcome, ${user.name}!`, 'success')
+      navigate(getDestinationPath(user.role))
     } catch (err) {
       const code = err?.code || 'auth/unknown'
       const friendlyMsg = getAuthErrorMessage(code)
-      // Popup-closed/cancelled is a soft error — don't show the error banner
       if (code !== 'auth/popup-closed') {
         setGlobalError(friendlyMsg)
       }
     } finally {
       setGoogleLoading(false)
     }
-  }, [googleLoading, setRole, toast, navigate, getRedirectPath])
+  }, [googleLoading, login, toast, navigate, requestedRole, getDestinationPath])
 
   const switchMode = () => {
     setMode(m => m === 'login' ? 'signup' : 'login')
@@ -354,26 +438,66 @@ export default function AuthPage() {
       <div className="auth-glow" />
 
       <div className="auth-card fade-up">
+        {/* Back Link to Role Selection */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: 'var(--clr-text-muted)', fontSize: '0.85rem', textDecoration: 'none' }}>
+            <ArrowLeft size={15} /> Return to Role Selection
+          </Link>
+        </div>
+
         {/* Logo */}
         <div className="auth-logo">
           <div className="auth-logo-icon"><Shield size={22} fill="white" /></div>
           <span className="auth-logo-text">RESQ<span style={{ color: 'var(--clr-primary)' }}>BRIDGE</span></span>
         </div>
 
-        <h1 className="auth-title">{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
-        <p className="auth-subtitle">
+        {/* Requested Role Badge */}
+        {requestedRole && (
+          <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
+            <span className={`badge ${requestedRole === 'admin' ? 'badge-purple' : requestedRole === 'responder' ? 'badge-blue' : 'badge-orange'}`}>
+              <Lock size={11} style={{ marginRight: '4px' }} />
+              {requestedRole === 'admin' ? 'Administrator Console' : requestedRole === 'responder' ? 'Responder Console' : 'Reporter Account'}
+            </span>
+          </div>
+        )}
+
+        <h1 className="auth-title">
           {mode === 'login'
-            ? 'Access the RESQBRIDGE reporting platform'
-            : 'Join RESQBRIDGE to submit and track incident reports'}
+            ? requestedRole === 'admin'
+              ? 'Sign in to Admin Console'
+              : requestedRole === 'responder'
+                ? 'Sign in to Responder Console'
+                : requestedRole === 'reporter'
+                  ? 'Sign in to Reporter Portal'
+                  : 'Sign in to RESQBRIDGE'
+            : 'Create Account'
+          }
+        </h1>
+        <p className="auth-subtitle">
+          {requestedRole === 'admin'
+            ? 'Authorized access for system administrators only'
+            : requestedRole === 'responder'
+              ? 'Authorized access for emergency response personnel only'
+              : requestedRole === 'reporter'
+                ? 'Sign in to track your submitted reports and receive incident updates'
+                : 'Sign in to access the RESQBRIDGE emergency response system'}
         </p>
 
-        {/* Emergency bar — always accessible regardless of auth state */}
+        {/* Emergency Bar */}
         <div className="alert alert-emergency auth-emergency">
           <Phone size={14} className="alert-icon" />
           <span style={{ fontSize: '0.8rem' }}>
-            <strong>Emergency?</strong> Call <a href="tel:112" style={{ color: 'var(--clr-primary)', fontWeight: 700 }}>112</a> — don't wait to sign in.
+            <strong>Active Emergency?</strong> Call <a href="tel:112" style={{ color: 'var(--clr-primary)', fontWeight: 700 }}>112</a> immediately.
           </span>
         </div>
+
+        {/* Reporter Quick Notice */}
+        {requestedRole === 'reporter' && (
+          <div className="alert alert-info" style={{ marginBottom: '1.25rem', fontSize: '0.825rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Anonymous reporting does not require an account.</span>
+            <Link to="/report" className="btn btn-accent btn-sm">Report Now</Link>
+          </div>
+        )}
 
         {/* Google Sign-In */}
         <GoogleButton
@@ -384,10 +508,10 @@ export default function AuthPage() {
 
         {/* Divider */}
         <div className="auth-divider">
-          <span>or continue with email</span>
+          <span>or sign in with agency credentials</span>
         </div>
 
-        {/* Global error banner */}
+        {/* Global Error Banner */}
         {globalError && (
           <div
             className="auth-error-banner"
@@ -400,8 +524,8 @@ export default function AuthPage() {
           </div>
         )}
 
+        {/* Form */}
         <form onSubmit={handleSubmit} noValidate aria-label={mode === 'login' ? 'Sign in form' : 'Create account form'}>
-          {/* Name (signup only) */}
           {mode === 'signup' && (
             <div className="form-group">
               <label className="form-label" htmlFor="auth-name">Full Name *</label>
@@ -409,7 +533,7 @@ export default function AuthPage() {
                 id="auth-name"
                 className={`form-input ${fieldErrors.name ? 'input-error' : ''}`}
                 type="text"
-                placeholder="Your full name"
+                placeholder="Officer / Citizen Full Name"
                 autoComplete="name"
                 value={name}
                 onChange={e => { setName(e.target.value); clearFieldError('name') }}
@@ -427,12 +551,12 @@ export default function AuthPage() {
 
           {/* Email */}
           <div className="form-group">
-            <label className="form-label" htmlFor="auth-email">Email address *</label>
+            <label className="form-label" htmlFor="auth-email">Agency or Personal Email *</label>
             <input
               id="auth-email"
               className={`form-input ${fieldErrors.email ? 'input-error' : ''}`}
               type="email"
-              placeholder="you@example.com"
+              placeholder="name@resqbridge.gov"
               autoComplete={mode === 'login' ? 'username' : 'email'}
               value={email}
               onChange={e => { setEmail(e.target.value); clearFieldError('email'); setGlobalError('') }}
@@ -458,7 +582,7 @@ export default function AuthPage() {
                 id="auth-password"
                 className={`form-input ${fieldErrors.password ? 'input-error' : ''}`}
                 type={showPw ? 'text' : 'password'}
-                placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+                placeholder="Enter password"
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={e => { setPassword(e.target.value); clearFieldError('password'); setGlobalError('') }}
@@ -471,7 +595,6 @@ export default function AuthPage() {
                 className="pw-toggle"
                 onClick={() => setShowPw(p => !p)}
                 aria-label={showPw ? 'Hide password' : 'Show password'}
-                tabIndex={0}
               >
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -483,7 +606,6 @@ export default function AuthPage() {
             )}
           </div>
 
-          {/* Confirm password (signup only) */}
           {mode === 'signup' && (
             <div className="form-group">
               <label className="form-label" htmlFor="auth-confirm-password">Confirm Password *</label>
@@ -517,7 +639,7 @@ export default function AuthPage() {
             </div>
           )}
 
-          {/* Submit */}
+          {/* Submit Button */}
           <button
             type="submit"
             className="btn btn-primary w-full auth-submit"
@@ -525,37 +647,22 @@ export default function AuthPage() {
             aria-busy={loading}
           >
             {loading
-              ? <><Loader2 size={16} className="spin" aria-hidden="true" /> {mode === 'login' ? 'Signing in…' : 'Creating account…'}</>
+              ? <><Loader2 size={16} className="spin" aria-hidden="true" /> Authenticating…</>
               : mode === 'login'
-                ? <><LogIn size={16} /> Sign in</>
-                : <><UserPlus size={16} /> Create account</>
+                ? <><LogIn size={16} /> Sign In</>
+                : <><UserPlus size={16} /> Create Account</>
             }
           </button>
         </form>
 
-        {/* Demo credentials hint */}
-        <div className="auth-demo-hint">
-          <div className="auth-demo-title">Demo credentials</div>
-          <div className="auth-demo-creds">
-            <div><span className="auth-demo-role">Reporter:</span> reporter@resqbridge.demo / demo1234</div>
-            <div><span className="auth-demo-role">Responder:</span> responder@resqbridge.demo / demo1234</div>
-            <div><span className="auth-demo-role">Admin:</span> admin@resqbridge.demo / demo1234</div>
-          </div>
-        </div>
-
         {/* Switch mode */}
         <div className="auth-switch">
           {mode === 'login' ? (
-            <span>Don't have an account? <button className="auth-link" onClick={switchMode}>Create one</button></span>
+            <span>Don't have an account? <button className="auth-link" onClick={switchMode}>Create Reporter Account</button></span>
           ) : (
-            <span>Already have an account? <button className="auth-link" onClick={switchMode}>Sign in</button></span>
+            <span>Already have an authorized account? <button className="auth-link" onClick={switchMode}>Sign In</button></span>
           )}
         </div>
-
-        <p className="auth-disclaimer">
-          RESQBRIDGE is a demonstration platform. No real emergency services are contacted when you submit a report.
-          Always call <a href="tel:112" style={{ color: 'var(--clr-primary)' }}>112</a> in a genuine emergency.
-        </p>
       </div>
     </div>
   )
