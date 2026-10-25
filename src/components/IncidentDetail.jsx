@@ -226,15 +226,15 @@ export default function IncidentDetail({ report: r, onBack }) {
                   return (
                     <div key={ag.id} className="agency-status-row">
                       <div className="flex items-center gap-2">
-                        <span>{ag.icon}</span>
-                        <div>
-                          <div style={{ fontWeight:600, fontSize:'0.875rem' }}>{ag.label}</div>
+                        <span style={{ flexShrink: 0 }}>{ag.icon}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight:600, fontSize:'0.875rem', wordBreak:'break-word' }}>{ag.label}</div>
                           <div style={{ fontSize:'0.72rem', color:'var(--clr-text-faint)' }}>{ag.number}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {st && <span className={`badge badge-${st === 'notified' ? 'green' : st === 'pending' ? 'yellow' : 'gray'}`}>{st}</span>}
-                        {!st && <span className="badge badge-gray">—</span>}
+                      <div className="agency-row-controls">
+                        {st && <span className={`badge badge-${st === 'notified' ? 'green' : st === 'pending' ? 'yellow' : 'gray'}`} style={{ flexShrink: 0 }}>{st}</span>}
+                        {!st && <span className="badge badge-gray" style={{ flexShrink: 0 }}>—</span>}
                         <select className="agency-status-select"
                           value={st || ''} onChange={e => notifyAgency(ag.id, e.target.value)}
                         >
